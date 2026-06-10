@@ -1,0 +1,46 @@
+// Docker container logs → Loki
+//
+// Promtail equivalent:
+//   scrape_configs:
+//     - job_name: docker
+//       docker_sd_configs:
+//         - host: unix:///var/run/docker.sock
+//           refresh_interval: 5s
+//       relabel_configs:
+//         - source_labels: ['__meta_docker_container_name']
+//           regex: '/(.*)'
+//           target_label: container
+//
+// NOTE: the `alloy` user must be able to read the Docker socket
+// (typically a member of the `docker` group).
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // /my-container -> my-container
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  labels     = {
+    job  = "docker",
+    host = constants.hostname,
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://LOKI_HOST:3100/loki/api/v1/push"
+  }
+}

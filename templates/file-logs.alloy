@@ -1,0 +1,39 @@
+// Flat log files → Loki  (e.g. Alpine /var/log/messages, *.log)
+//
+// Promtail equivalent:
+//   scrape_configs:
+//     - job_name: syslog
+//       static_configs:
+//         - targets: [localhost]
+//           labels:
+//             job: syslog
+//             __path__: /var/log/messages
+//
+// NOTE: on Alpine, /var/log/messages is root:wheel 0640 — the `alloy` user
+// must be in the `wheel` group or it reads nothing (and logs no error).
+
+local.file_match "syslog" {
+  path_targets = [
+    {
+      __path__ = "/var/log/messages",
+      job      = "syslog",
+      host     = constants.hostname,
+    },
+    {
+      __path__ = "/var/log/*.log",
+      job      = "syslog",
+      host     = constants.hostname,
+    },
+  ]
+}
+
+loki.source.file "syslog" {
+  targets    = local.file_match.syslog.targets
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://LOKI_HOST:3100/loki/api/v1/push"
+  }
+}

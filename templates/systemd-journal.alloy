@@ -1,0 +1,47 @@
+// systemd journal → Loki
+//
+// Promtail equivalent:
+//   scrape_configs:
+//     - job_name: systemd-journal
+//       journal:
+//         max_age: 12h
+//         labels:
+//           job: systemd-journal
+//       relabel_configs:
+//         - source_labels: ['__journal__systemd_unit']
+//           target_label: unit
+//
+// In Alloy, relabeling is a SEPARATE component (loki.relabel) whose `.rules`
+// export is wired into the journal source's `relabel_rules` argument.
+
+loki.relabel "journal" {
+  forward_to = []
+
+  // __journal__systemd_unit -> unit
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  // optional: expose syslog priority as a `level` label
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+loki.source.journal "read" {
+  max_age       = "12h"
+  relabel_rules = loki.relabel.journal.rules
+  labels        = {
+    job  = "systemd-journal",
+    host = constants.hostname,
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://LOKI_HOST:3100/loki/api/v1/push"
+  }
+}
