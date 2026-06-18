@@ -6,6 +6,8 @@
 
 It is config templates and notes, not a tool — copy what you need, swap the placeholders, ship.
 
+> 📖 **The story behind it** — how this played out across the real fleet, including the two *silent* failures (a missing Unix group, and a binary 4× heavier than its predecessor): [**Promtail est mort, vive Alloy**](https://blog.pixelium.win/promtail-est-mort-vive-alloy) (FR).
+
 ---
 
 ## Why migrate
@@ -76,3 +78,7 @@ curl -G "http://LOKI_HOST:3100/loki/api/v1/label/host/values" \
 ## License
 
 MIT
+
+---
+
+*Born from a real homelab migration — more infrastructure & observability write-ups at [blog.pixelium.win](https://blog.pixelium.win) · [pixelium.win](https://pixelium.win).*
