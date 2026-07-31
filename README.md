@@ -53,6 +53,7 @@ Alloy's anonymous usage reporting is **on by default** and contacts `stats.grafa
 - Alpine/OpenRC: `command_args="--disable-reporting"` in `/etc/conf.d/alloy`
 
 > Reported upstream: [grafana/alloy#6474](https://github.com/grafana/alloy/issues/6474) (related: [#2524](https://github.com/grafana/alloy/issues/2524)).
+> ✅ **Fixed upstream in Alloy v1.18.0** (2026-07-20): [#6478](https://github.com/grafana/alloy/pull/6478) backs off when usage reporting keeps failing, so the query storm stops on its own. On **v1.17.x and older, the flag above is still the fix** — and disabling reporting outright remains the right call on an air-gapped or blocklisted network.
 
 ### 2. The `alloy` user needs the right groups, or you get **zero logs, silently**
 - **systemd journal**: `alloy` must be in the `systemd-journal` (and usually `adm`) group, otherwise it reads nothing and logs no error.
