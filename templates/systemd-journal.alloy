@@ -38,6 +38,16 @@ loki.source.journal "read" {
     host = constants.hostname,
   }
   forward_to = [loki.write.default.receiver]
+
+  // Resume from Promtail's journal cursor instead of replaying `max_age` (12h)
+  // of journal into Loki. `name` is the Promtail `job_name` of the journal
+  // scrape. `alloy convert` does NOT generate this block. A wrong `name` still
+  // logs "successfully converted": check for a `cursor-` entry in Alloy's
+  // positions.yml instead. See README, gotcha 5.
+  legacy_position {
+    file = "/tmp/positions.yaml"
+    name = "systemd-journal"
+  }
 }
 
 loki.write "default" {

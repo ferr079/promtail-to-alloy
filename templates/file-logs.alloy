@@ -30,6 +30,13 @@ local.file_match "syslog" {
 loki.source.file "syslog" {
   targets    = local.file_match.syslog.targets
   forward_to = [loki.write.default.receiver]
+
+  // Resume where Promtail stopped instead of re-reading every file from the
+  // start (duplicates in Loki). Point it at Promtail's `positions.filename`.
+  // Converted once, on Alloy's first start; ignored after that. A wrong path is
+  // only an `info` log line: check that Alloy's own positions.yml lists your
+  // files after the first start. See README, gotcha 5.
+  legacy_positions_file = "/tmp/positions.yaml"
 }
 
 loki.write "default" {
