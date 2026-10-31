@@ -41,7 +41,7 @@ The key mental shift: in Promtail `relabel_configs` lives *inside* the scrape co
 | [`templates/file-logs.alloy`](templates/file-logs.alloy) | Promtail static file scrape (`/var/log/messages`, `*.log`) |
 | [`templates/docker.alloy`](templates/docker.alloy) | Promtail `docker_sd_configs` |
 
-Replace `LOKI_HOST` with your Loki push endpoint. Each template is self-contained (includes its own `loki.write`).
+Replace `LOKI_HOST` with your Loki push endpoint, and `/tmp/positions.yaml` with your Promtail `positions.filename` (see gotcha 5). Each template is self-contained (includes its own `loki.write`). Templates load on Alloy v1.21.3.
 
 ## Gotchas (the part the docs don't warn you about)
 
@@ -65,8 +65,31 @@ The Alloy binary is ~400 MB on disk and RSS sits around ~190 MB (vs ~60 MB for P
 ### 4. Alloy adds labels Promtail didn't
 Alloy attaches `service_name` and `detected_level` automatically. These are additive (existing dashboards keep working), but worth knowing when you see new labels appear.
 
-### 5. Cut over safely
-Don't stop Promtail until Alloy is confirmed shipping. A safe ordering: install Alloy → verify the host appears in Loki (`label/host/values?since=10m`) → only then stop and remove Promtail.
+### 5. Carry Promtail's read positions over, or Loki gets duplicates 🔴
+Alloy keeps its own positions file and does not read Promtail's. Started without one, `loki.source.file` re-reads every matched file **from the beginning**, and `loki.source.journal` replays up to `max_age` of journal: everything Promtail already shipped lands in Loki a second time.
+
+Alloy can convert Promtail's file once, on its first start:
+- **files**: `legacy_positions_file = "<Promtail positions.filename>"` in `loki.source.file`. `alloy convert` sets it for you; a hand-written config does not.
+- **journal**: a `legacy_position { file = "…", name = "<Promtail job_name>" }` block in `loki.source.journal`. `alloy convert` does **not** generate this one.
+
+Where Promtail kept it: `positions.filename` in its config. The built-in default is `/var/log/positions.yaml`; the sample config many packages ship uses `/tmp/positions.yaml`, which a reboot may have wiped.
+
+The conversion fails quietly in two ways, then Alloy re-reads everything:
+- a wrong path or a missing file is a single `level=info` line ("will not convert the legacy positions file");
+- a wrong journal `name` converts nothing, **and Alloy still logs `successfully converted legacy positions file`** (seen on v1.21.3).
+
+So don't trust the log line alone. On the first start, read the positions file Alloy wrote under its `--storage.path`: `loki.source.file.<label>/positions.yml` must list your files, and `loki.source.journal.<label>/positions.yml` must hold a `cursor-…` entry. An empty `positions: {}` means the conversion missed. The opposite case is loud: if the file exists but `alloy` cannot read it, the component refuses to start (since v1.19.0, [#6750](https://github.com/grafana/alloy/issues/6750)), so give `alloy` read access first (see gotcha 2).
+
+The conversion only runs while Alloy has no positions file of its own. If Alloy already ran once on the host, it is too late for that host.
+
+### 6. Cut over safely
+Stop Promtail **before** Alloy's first start, so the positions Alloy converts are final:
+1. Install Alloy with the `legacy_*` settings from gotcha 5, but don't start it yet.
+2. Stop Promtail. Its positions file is now frozen.
+3. Start Alloy. Check the positions files it wrote (gotcha 5), then check that the host appears in Loki (`label/host/values?since=10m`, below).
+4. Only then remove Promtail.
+
+If Alloy misbehaves, stop it and start Promtail again: its positions are still valid, so nothing is lost or sent twice. Running both agents side by side ships every new line twice for as long as the overlap lasts.
 
 ## Validate the migration
 
